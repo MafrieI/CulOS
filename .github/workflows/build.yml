@@ -1,4 +1,4 @@
-# .github/workflows/build.yml - Flusso corretto con Ambiente Fedora Privilegiato per ISO
+# .github/workflows/build.yml - Generazione ISO nativa per Fedora 44
 name: Build CulOS Immutable Image & Bootable ISO
 on:
   schedule:
@@ -58,32 +58,35 @@ jobs:
     name: Generate Bootable ISO Installation Media
     needs: build-image
     runs-on: ubuntu-latest
-    # CRUCIALE: Eseguiamo i comandi dentro Fedora con permessi di amministrazione per abilitare mkksiso
-    container:
-      image: registry.fedoraproject.org/fedora:44
-      options: --privileged
     permissions:
       contents: read
     steps:
       - name: Checkout Code Repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies inside Fedora Runner container
-        run: dnf install -y lorax ostree rpm-ostree
+      - name: Create ISO Output Directory
+        run: mkdir -p ./iso-output
 
-      - name: Generate Bare-Metal Installer ISO
-        uses: ublue-os/isogenerator@main
-        with:
-          image-name: ${{ env.IMAGE_NAME }}
-          installer-repo: fedora-silverblue
-          installer-major-version: 44
-          image-repo: ${{ env.IMAGE_REGISTRY }}
-          variant: 'Kinoite'
-          image-tag: 'latest'
+      - name: Generate Bare-Metal Installer ISO for Fedora 44
+        # Eseguiamo il container ufficiale forzando i parametri strutturali corretti per Fedora 44
+        run: |
+          docker run --rm --privileged \
+            -v .:/isogenerator/output \
+            -e VERSION=44 \
+            -e IMAGE_NAME=${{ env.IMAGE_NAME }} \
+            -e IMAGE_TAG=latest \
+            -e IMAGE_REPO=${{ env.IMAGE_REGISTRY }} \
+            -e VARIANT=Kinoite \
+            ghcr.io/ublue-os/isogenerator:latest
+
+      - name: Move generated ISO to artifact path
+        run: |
+          mkdir -p ./iso-target
+          mv *.iso ./iso-target/ || true
 
       - name: Upload Bootable CulOS Installation Media Artifact
         uses: actions/upload-artifact@v4
         with:
           name: CulOS-Kinoite-44-Installation-ISO
-          path: ./iso-output/*.iso
+          path: ./iso-target/*.iso
           retention-days: 14
