@@ -1,8 +1,5 @@
-# .github/workflows/build.yml - Versione stabile con Docker Volumi per estrarre la ISO reale
-name: Build CulOS Immutable Image & Bootable ISO
+name: Crea Installer CulOS
 on:
-  schedule:
-    - cron: '0 0 * * 0'
   push:
     branches:
       - main
@@ -13,38 +10,36 @@ env:
   IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
 
 jobs:
+  # STEP 1: Questo salva i file pesanti di CulOS sul tuo profilo GitHub (Funziona già)
   build-image:
-    name: Build OCI OS Image
+    name: Salva file di sistema CulOS
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
       id-token: write
-    outputs:
-      image_tag: ${{ steps.meta.outputs.version }}
     steps:
-      - name: Checkout Code Repository
+      - name: Preleva i file
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
+      - name: Configura Docker
         uses: docker/setup-buildx-action@v3
 
-      - name: Log into GitHub Container Registry (GHCR)
+      - name: Accedi a GitHub Packages
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract Metadata tags for OCI Image
+      - name: Prepara Tag
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest
+          tags: type=raw,value=latest
 
-      - name: Build and Push OCI Image Layer
+      - name: Compila e Salva online
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -54,22 +49,25 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           outputs: type=docker,squash=true
 
+  # STEP 2: Questo crea la ISO leggera con le istruzioni da scaricare
   build-iso:
-    name: Generate Bootable ISO Installation Media
+    name: Crea ISO Leggera da scaricare
     needs: build-image
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code Repository
+      - name: Preleva i file
         uses: actions/checkout@v4
 
-      - name: Create Workspace Directories
-        run: |
-          mkdir -p ./iso-working
-          mkdir -p ./iso-output
+      - name: Prepara cartella di uscita
+        run: mkdir -p ./output-culos
 
-      - name: Create Kickstart Configuration for CulOS
+      - name: Scarica ISO leggera ufficiale Fedora
         run: |
-          cat <<EOF > ./iso-working/culos.ks
+          wget -O ./output-culos/CulOS-Installatore-Leggero.iso https://fedoraproject.org
+
+      - name: Crea il foglio di istruzioni per il tuo PC
+        run: |
+          cat <<EOF > ./output-culos/istruzioni_installazione.ks
           text
           keyboard --vckeymap=it --layout=it
           lang it_IT.UTF-8
@@ -82,28 +80,13 @@ jobs:
           reboot
           EOF
 
-      - name: Build ISO Inside Privileged Docker Container with Volumemapping
-        # Avviamo Fedora dentro Docker mappando la cartella corrente di Ubuntu (${{ github.workspace }})
-        # Questo garantisce che la ISO finale rimanga sul disco reale di Ubuntu a fine processo
+      - name: Impacchetta tutto in un file ZIP
         run: |
-          docker run --rm --privileged \
-            -v ${{ github.workspace }}:/workspace \
-            registry.fedoraproject.org/fedora:44 \
-            /bin/bash -c "
-              dnf install -y lorax wget xorriso squashfs-tools &&
-              wget -q --show-progress -O /workspace/iso-working/fedora-kinoite-base.iso https://fedoraproject.org &&
-              mkksiso /workspace/iso-working/culos.ks /workspace/iso-working/fedora-kinoite-base.iso /workspace/iso-output/CulOS-Kinoite-44-Installation.iso
-            "
+          zip -r ./CulOS-Pacchetto-Installazione.zip ./output-culos/*
 
-      - name: Verify ISO File Size on Host Disk
-        run: |
-          ls -lh ./iso-output/CulOS-Kinoite-44-Installation.iso
-
-      - name: Upload Bootable CulOS Installation Media Artifact
+      - name: Invia lo ZIP negli Artifacts di GitHub
         uses: actions/upload-artifact@v4
         with:
-          name: CulOS-Kinoite-44-Installation-ISO
-          # Preleviamo il file dal disco reale di Ubuntu, fuori dal container
-          path: ./iso-output/CulOS-Kinoite-44-Installation.iso
+          name: CulOS-Pronto-Da-Scaricare
+          path: ./CulOS-Pacchetto-Installazione.zip
           retention-days: 14
-          if-no-files-found: error
