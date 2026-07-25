@@ -58,7 +58,6 @@ jobs:
     name: Generate Bootable ISO Installation Media
     needs: build-image
     runs-on: ubuntu-latest
-    # CRUCIALE: Eseguiamo tutto direttamente in un container Fedora 44 pulito e privilegiato
     container:
       image: registry.fedoraproject.org/fedora:44
       options: --privileged
@@ -67,7 +66,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Fedora Native ISO Generation Tools
-        # Dnf troverà lorax e mkksiso istantaneamente senza errori di repository
         run: |
           dnf install -y lorax wget xorriso squashfs-tools
 
@@ -93,12 +91,19 @@ jobs:
 
       - name: Inject CulOS Configurations into ISO via Native Mkksiso
         run: |
-          # mkksiso ora funzionerà perfettamente perché l'ambiente è Fedora nativo
+          # Generiamo la ISO direttamente nel workspace principale di GitHub
           mkksiso ./iso-working/culos.ks ./iso-working/fedora-kinoite-base.iso ./CulOS-Kinoite-44-Installation.iso
+
+      - name: Fix File Permissions for GitHub Runner
+        # CRUCIALE: Ripristina i permessi di lettura per l'utente non-root di GitHub Actions, altrimenti l'uploader non legge i GB di dati
+        run: |
+          chmod 644 ./CulOS-Kinoite-44-Installation.iso
+          chown 1001:1001 ./CulOS-Kinoite-44-Installation.iso
 
       - name: Upload Bootable CulOS Installation Media Artifact
         uses: actions/upload-artifact@v4
         with:
           name: CulOS-Kinoite-44-Installation-ISO
-          path: ./CulOS-Kinoite-44-Installation.iso
+          path: CulOS-Kinoite-44-Installation.iso
           retention-days: 14
+          if-no-files-found: error
