@@ -1,19 +1,42 @@
-# Containerfile - CulOS Ottimizzato per prevenire il limite dei Layer
-FROM ghcr.io/ublue-os/kinoite-main:44 AS base
+# ==========================================
+# STAGE 1: Immagine temporanea per appiattire il sistema
+# ==========================================
+FROM ghcr.io/ublue-os/kinoite-main:44 AS upstream-source
 
-# Copia gli script necessari in un'unica operazione
-COPY recipe.yml system_skel_configs.sh /tmp/
+# ==========================================
+# STAGE 2: Ambiente di pulizia e configurazione CulOS
+# ==========================================
+FROM alpine:latest AS builder
+RUN apk add --noarch bash coreutils
 
-# Concatenazione delle operazioni in un unico livello strutturale (evita il max depth)
-RUN chmod +x /tmp/system_skel_configs.sh && \
-    /tmp/system_skel_configs.sh && \
-    echo 'id-dependent-activation' > /etc/modules-load.d/nvidia.conf && \
-    printf "blacklist nouveau\noptions nouveau modeset=0\n" > /etc/modprobe.d/blacklist-nouveau.conf && \
-    printf '#!/bin/bash\nif ! lspci | grep -qi "nvidia"; then\n  echo "No NVIDIA GPU detected. Masking NVIDIA services."\n  systemctl mask nvidia-fallback.service\nfi\n' > /usr/bin/culos-hardware-detect && \
-    chmod +x /usr/bin/culos-hardware-detect && \
-    printf '[Unit]\nDescription=CulOS Hardware Detection Hook\nBefore=display-manager.service\n\n[Service]\nType=oneshot\nExecStart=/usr/bin/culos-hardware-detect\nRemainAfterExit=yes\n\n[Install]\nWantedBy=multi-user.target\n' > /usr/lib/systemd/system/culos-hardware.service && \
-    ln -s /usr/lib/systemd/system/culos-hardware.service /etc/systemd/system/multi-user.target.wants/culos-hardware.service && \
-    mkdir -p /etc/xdg && \
-    printf "[Icons]\nTheme=Papirus-Dark\n\n[General]\nfont=Google Sans Flex,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1\n" > /etc/xdg/kdeglobals && \
-    printf "[Plugins]\ntileassistEnabled=true\n" > /etc/xdg/kwinrc && \
-    ostree container commit
+# Prepariamo la struttura root isolata
+RUN mkdir -p /rootfs
+
+# Copiamo l'intero file system di Kinoite eliminando i vecchi layer
+COPY --from=upstream-source / /rootfs/
+COPY recipe.yml system_skel_configs.sh /rootfs/tmp/
+
+# Eseguiamo le configurazioni inserendole direttamente nella root pulita
+RUN chmod +x /rootfs/tmp/system_skel_configs.sh && \
+    /rootfs/tmp/system_skel_configs.sh && \
+    mkdir -p /rootfs/etc/modules-load.d /rootfs/etc/modprobe.d /rootfs/usr/bin /rootfs/etc/xdg /rootfs/usr/lib/systemd/system && \
+    echo 'id-dependent-activation' > /rootfs/etc/modules-load.d/nvidia.conf && \
+    printf "blacklist nouveau\noptions nouveau modeset=0\n" > /rootfs/etc/modprobe.d/blacklist-nouveau.conf && \
+    printf '#!/bin/bash\nif ! lspci | grep -qi "nvidia"; then\n  echo "No NVIDIA GPU detected. Masking NVIDIA services."\n  systemctl mask nvidia-fallback.service\nfi\n' > /rootfs/usr/bin/culos-hardware-detect && \
+    chmod +x /rootfs/usr/bin/culos-hardware-detect && \
+    printf '[Unit]\nDescription=CulOS Hardware Detection Hook\nBefore=display-manager.service\n\n[Service]\nType=oneshot\nExecStart=/usr/bin/culos-hardware-detect\nRemainAfterExit=yes\n\n[Install]\nWantedBy=multi-user.target\n' > /rootfs/usr/lib/systemd/system/culos-hardware.service && \
+    ln -sf /usr/lib/systemd/system/culos-hardware.service /rootfs/etc/systemd/system/multi-user.target.wants/culos-hardware.service && \
+    printf "[Icons]\nTheme=Papirus-Dark\n\n[General]\nfont=Google Sans Flex,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1\n" > /rootfs/etc/xdg/kdeglobals && \
+    printf "[Plugins]\ntileassistEnabled=true\n" > /rootfs/etc/xdg/kwinrc && \
+    rm -f /rootfs/tmp/recipe.yml /rootfs/tmp/system_skel_configs.sh
+
+# ==========================================
+# STAGE 3: Immagine finale CulOS (Profondità Layer: 1)
+# ==========================================
+FROM scratch
+COPY --from=builder /rootfs /
+
+# Etichette di compatibilità richieste dall'architettura dei sistemi atomici
+ENV IMAGE_NAME="culos"
+ENV FEDORA_VERSION="44"
+CMD ["/usr/lib/systemd/systemd"]
