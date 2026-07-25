@@ -1,4 +1,4 @@
-# .github/workflows/build.yml - Versione nativa Fedora per evitare incompatibilità Ubuntu
+# .github/workflows/build.yml - Versione stabile con Docker Volumi per estrarre la ISO reale
 name: Build CulOS Immutable Image & Bootable ISO
 on:
   schedule:
@@ -58,21 +58,14 @@ jobs:
     name: Generate Bootable ISO Installation Media
     needs: build-image
     runs-on: ubuntu-latest
-    container:
-      image: registry.fedoraproject.org/fedora:44
-      options: --privileged
     steps:
       - name: Checkout Code Repository
         uses: actions/checkout@v4
 
-      - name: Install Fedora Native ISO Generation Tools
-        run: |
-          dnf install -y lorax wget xorriso squashfs-tools
-
-      - name: Download Official Fedora Kinoite 44 Base ISO
+      - name: Create Workspace Directories
         run: |
           mkdir -p ./iso-working
-          wget -q --show-progress -O ./iso-working/fedora-kinoite-base.iso https://fedoraproject.org
+          mkdir -p ./iso-output
 
       - name: Create Kickstart Configuration for CulOS
         run: |
@@ -89,21 +82,28 @@ jobs:
           reboot
           EOF
 
-      - name: Inject CulOS Configurations into ISO via Native Mkksiso
+      - name: Build ISO Inside Privileged Docker Container with Volumemapping
+        # Avviamo Fedora dentro Docker mappando la cartella corrente di Ubuntu (${{ github.workspace }})
+        # Questo garantisce che la ISO finale rimanga sul disco reale di Ubuntu a fine processo
         run: |
-          # Generiamo la ISO direttamente nel workspace principale di GitHub
-          mkksiso ./iso-working/culos.ks ./iso-working/fedora-kinoite-base.iso ./CulOS-Kinoite-44-Installation.iso
+          docker run --rm --privileged \
+            -v ${{ github.workspace }}:/workspace \
+            registry.fedoraproject.org/fedora:44 \
+            /bin/bash -c "
+              dnf install -y lorax wget xorriso squashfs-tools &&
+              wget -q --show-progress -O /workspace/iso-working/fedora-kinoite-base.iso https://fedoraproject.org &&
+              mkksiso /workspace/iso-working/culos.ks /workspace/iso-working/fedora-kinoite-base.iso /workspace/iso-output/CulOS-Kinoite-44-Installation.iso
+            "
 
-      - name: Fix File Permissions for GitHub Runner
-        # CRUCIALE: Ripristina i permessi di lettura per l'utente non-root di GitHub Actions, altrimenti l'uploader non legge i GB di dati
+      - name: Verify ISO File Size on Host Disk
         run: |
-          chmod 644 ./CulOS-Kinoite-44-Installation.iso
-          chown 1001:1001 ./CulOS-Kinoite-44-Installation.iso
+          ls -lh ./iso-output/CulOS-Kinoite-44-Installation.iso
 
       - name: Upload Bootable CulOS Installation Media Artifact
         uses: actions/upload-artifact@v4
         with:
           name: CulOS-Kinoite-44-Installation-ISO
-          path: CulOS-Kinoite-44-Installation.iso
+          # Preleviamo il file dal disco reale di Ubuntu, fuori dal container
+          path: ./iso-output/CulOS-Kinoite-44-Installation.iso
           retention-days: 14
           if-no-files-found: error
