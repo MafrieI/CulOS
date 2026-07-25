@@ -1,3 +1,4 @@
+# .github/workflows/build.yml - Flusso corretto con Ambiente Fedora Privilegiato per ISO
 name: Build CulOS Immutable Image & Bootable ISO
 on:
   schedule:
@@ -51,18 +52,24 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Riduciamo l'output finale a un unico strato compatto
           outputs: type=docker,squash=true
 
   build-iso:
     name: Generate Bootable ISO Installation Media
     needs: build-image
     runs-on: ubuntu-latest
+    # CRUCIALE: Eseguiamo i comandi dentro Fedora con permessi di amministrazione per abilitare mkksiso
+    container:
+      image: registry.fedoraproject.org/fedora:44
+      options: --privileged
     permissions:
       contents: read
     steps:
       - name: Checkout Code Repository
         uses: actions/checkout@v4
+
+      - name: Install dependencies inside Fedora Runner container
+        run: dnf install -y lorax ostree rpm-ostree
 
       - name: Generate Bare-Metal Installer ISO
         uses: ublue-os/isogenerator@main
@@ -80,4 +87,3 @@ jobs:
           name: CulOS-Kinoite-44-Installation-ISO
           path: ./iso-output/*.iso
           retention-days: 14
-
