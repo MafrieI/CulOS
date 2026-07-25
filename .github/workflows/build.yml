@@ -75,8 +75,9 @@ jobs:
           image-tag: 'latest'
 
       - name: Upload Bootable CulOS Installation Media Artifact
-        uses: actions/artifacts-upload@v4
+        uses: actions/upload-artifact@v4
         with:
           name: CulOS-Kinoite-44-Installation-ISO
           path: ./iso-output/*.iso
           retention-days: 14
+
