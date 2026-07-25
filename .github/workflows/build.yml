@@ -1,4 +1,4 @@
-# .github/workflows/build.yml - Generazione ISO nativa stabile senza container esterni
+# .github/workflows/build.yml - Versione Nativa Blindata contro blocchi di rete
 name: Build CulOS Immutable Image & Bootable ISO
 on:
   schedule:
@@ -62,20 +62,25 @@ jobs:
       - name: Checkout Code Repository
         uses: actions/checkout@v4
 
-      - name: Install Fedora ISO Generation Tools
+      - name: Fix Runner Network DNS Parameters
+        # Forza i DNS di Google sul runner per evitare l'errore "No address associated with hostname"
+        run: |
+          sudo chmod 777 /etc/resolv.conf
+          echo "nameserver 8.8.8.8" > /etc/resolv.conf
+          echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+
+      - name: Install ISO Generation Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y xorriso squashfs-tools wget
+          sudo apt-get install -y xorriso squashfs-tools wget lorax isolinux
 
       - name: Download Official Fedora Kinoite 44 Base ISO
         run: |
           mkdir -p ./iso-working
-          # Scarica la ISO ufficiale pulita di Fedora Kinoite 44
-          wget -O ./iso-working/fedora-kinoite-base.iso https://fedoraproject.org
+          wget -q --show-progress -O ./iso-working/fedora-kinoite-base.iso https://fedoraproject.org
 
       - name: Create Kickstart Configuration for CulOS
         run: |
-          # Genera il file di automazione che dice all'installer di scaricare la TUA immagine anziché quella di Fedora
           cat <<EOF > ./iso-working/culos.ks
           text
           keyboard --vckeymap=it --layout=it
@@ -89,12 +94,10 @@ jobs:
           reboot
           EOF
 
-      - name: Inject CulOS Configurations into ISO
+      - name: Inject CulOS Configurations into ISO via Native Mkksiso
         run: |
-          # Usiamo uno script ufficiale per incorporare il kickstart nella ISO base
-          wget https://githubusercontent.com
-          chmod +x mkksiso
-          sudo ./mkksiso ./iso-working/culos.ks ./iso-working/fedora-kinoite-base.iso ./CulOS-Kinoite-44-Installation.iso
+          # Chiamiamo lo strumento mkksiso nativo già presente nel sistema operativo
+          sudo mkksiso ./iso-working/culos.ks ./iso-working/fedora-kinoite-base.iso ./CulOS-Kinoite-44-Installation.iso
 
       - name: Upload Bootable CulOS Installation Media Artifact
         uses: actions/upload-artifact@v4
