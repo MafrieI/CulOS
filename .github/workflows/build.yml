@@ -1,17 +1,20 @@
-# .github/workflows/build.yml
-name: Build CulOS and Generate ISO
+# .github/workflows/build.yml - Automated OS Deployment Pipeline
+name: Build CulOS Immutable Image & Bootable ISO
 on:
   schedule:
-    - cron: '0 0 * * 0' # Compiles automatically every Sunday night
-  workflow_dispatch: # Allows manual trigger from the GitHub browser interface
+    - cron: '0 0 * * 0' # Automated weekly rebuilds
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 env:
   IMAGE_NAME: culos
-  REGISTRY: ghcr.io
+  IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
 
 jobs:
-  build:
-    name: Build and Push Image
+  build-image:
+    name: Build OCI OS Image
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -20,25 +23,26 @@ jobs:
     outputs:
       image_tag: ${{ steps.meta.outputs.version }}
     steps:
-      - name: Checkout Code
+      - name: Checkout Code Repository
         uses: actions/checkout@v4
 
-      - name: Log in to GitHub Container Registry
+      - name: Log into GitHub Container Registry (GHCR)
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate Metadata
+      - name: Extract Metadata tags for OCI Image
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest
+            type=sha,format=short
 
-      - name: Compile OS Image
+      - name: Build and Push OCI Image Layer
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -47,28 +51,29 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  generate-iso:
-    name: Generate Bootable File ISO
-    needs: build
+  build-iso:
+    name: Generate Bootable ISO Installation Media
+    needs: build-image
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
-      id-token: write
     steps:
-      - name: Generate ISO via uBlue Image Builder
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Generate Bare-Metal Installer ISO
         uses: ublue-os/isogenerator@main
         with:
           image-name: ${{ env.IMAGE_NAME }}
-          installer-repo: fedora-kinoite
+          installer-repo: fedora-silverblue
           installer-major-version: 44
-          image-repo: ${{ env.REGISTRY }}/${{ github.repository_owner }}
-          image-tag: latest
+          image-repo: ${{ env.IMAGE_REGISTRY }}
           variant: 'Kinoite'
+          image-tag: 'latest'
 
-      - name: Upload ISO Artifact to GitHub Downloads
-        uses: actions/upload-artifact@v4
+      - name: Upload Bootable CulOS Installation Media Artifact
+        uses: actions/artifacts-upload@v4
         with:
-          name: culos-distro-iso
-          path: ./deploy-iso/*.iso
-          retention-days: 7
+          name: CulOS-Kinoite-44-Installation-ISO
+          path: ./iso-output/*.iso
+          retention-days: 14
