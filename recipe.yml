@@ -1,4 +1,3 @@
-# recipe.yml - CulOS Production Image Recipe
 name: culos
 description: A high-performance, immutable KDE Plasma distribution based on Fedora Kinoite 44.
 base-image: ghcr.io/ublue-os/kinoite-main
@@ -7,9 +6,7 @@ image-version: 44
 modules:
   - type: yum-repo
     repos:
-      # CachyOS Kernel Repository for Fedora
       - https://fedorainfracloud.org
-      # RPM Fusion Free & Nonfree for NVIDIA drivers and multimedia codecs
       - https://rpmfusion.org
       - https://rpmfusion.org
 
@@ -19,29 +16,23 @@ modules:
       - rpmfusion-free-release
       - rpmfusion-nonfree-release
     remove:
-      # Remove default Fedora Kernel
       - kernel
       - kernel-core
       - kernel-modules
       - kernel-modules-extra
-      # Remove KDE Discover to enforce terminal-free containerized app store strategy
       - plasma-discover
       - plasma-discover-flatpak
       - plasma-discover-notifier
     install:
-      # Install CachyOS Kernel & BORE Scheduler packages
       - kernel-cachyos
       - kernel-cachyos-core
       - kernel-cachyos-modules
       - kernel-cachyos-modules-extra
-      # Container and subsystem tooling
       - podman
       - distrobox
-      # Hardware and graphical dependencies (NVIDIA pre-baking)
       - akmod-nvidia
       - xorg-x11-drv-nvidia-cuda
       - mesa-vulkan-drivers
-      # Fonts & Themes tooling dependencies
       - google-sans-flex-fonts
       - papirus-icon-theme
 
@@ -49,11 +40,5 @@ modules:
     remotes:
       flathub: https://flathub.org
     install:
-      # Enforced GUI Application Store
       - io.github.kolunmi.Bazaar
-      # Graphical Container Management Subsystem
       - io.github.dvlv.boxbuddyrs
-
-  - type: script
-    scripts:
-      - system_skel_configs.sh
