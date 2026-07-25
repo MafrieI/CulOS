@@ -1,5 +1,5 @@
 # Containerfile - CulOS OCI Image Customization Layer
-FROM ghcr.io/fedora-atomic/kinoite:44 AS base
+FROM ghcr.io/ublue-os/kinoite-main:44 AS base
 
 # Copy over custom repository keys and script tasks
 COPY recipe.yml /tmp/recipe.yml
