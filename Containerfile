@@ -1,22 +1,21 @@
 # ==========================================
-# STAGE 1: Immagine temporanea per appiattire il sistema
+# STAGE 1: Preleva l'immagine originale satura di layer
 # ==========================================
 FROM ghcr.io/ublue-os/kinoite-main:44 AS upstream-source
 
 # ==========================================
-# STAGE 2: Ambiente di pulizia e configurazione CulOS
+# STAGE 2: Ambiente temporaneo Fedora per pulizia e tweak
 # ==========================================
-FROM alpine:latest AS builder
-RUN apk add --noarch bash coreutils
+FROM registry.fedoraproject.org/fedora:44 AS builder
 
-# Prepariamo la struttura root isolata
+# Crea una cartella per isolare il file system finale
 RUN mkdir -p /rootfs
 
-# Copiamo l'intero file system di Kinoite eliminando i vecchi layer
+# Estrai l'intero file system di Kinoite appiattendolo in un unico blocco
 COPY --from=upstream-source / /rootfs/
 COPY recipe.yml system_skel_configs.sh /rootfs/tmp/
 
-# Eseguiamo le configurazioni inserendole direttamente nella root pulita
+# Applica le configurazioni di CulOS scrivendole direttamente sul file system piatto
 RUN chmod +x /rootfs/tmp/system_skel_configs.sh && \
     /rootfs/tmp/system_skel_configs.sh && \
     mkdir -p /rootfs/etc/modules-load.d /rootfs/etc/modprobe.d /rootfs/usr/bin /rootfs/etc/xdg /rootfs/usr/lib/systemd/system && \
@@ -36,7 +35,7 @@ RUN chmod +x /rootfs/tmp/system_skel_configs.sh && \
 FROM scratch
 COPY --from=builder /rootfs /
 
-# Etichette di compatibilità richieste dall'architettura dei sistemi atomici
+# Variabili d'ambiente necessarie all'architettura ostree/atomic
 ENV IMAGE_NAME="culos"
 ENV FEDORA_VERSION="44"
 CMD ["/usr/lib/systemd/systemd"]
