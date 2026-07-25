@@ -1,43 +1,59 @@
-# recipe.yml
+# recipe.yml - CulOS Production Image Recipe
 name: culos
-description: CulOS - An immutable Linux distribution based on Fedora Kinoite 44 featuring the high-performance CachyOS kernel, gaming hubs, and smart system management tools.
-base-image: ghcr.io/ublue-os/kinoite-main
-fedora-version: 44
+description: A high-performance, immutable KDE Plasma distribution based on Fedora Kinoite 44.
+base-image: ghcr.io/fedora-atomic/kinoite:44
+image-version: 44
 
 modules:
   - type: yum-repo
     repos:
-      - copr:bieszczaders/kernel-cachyos
-      - copr:perabyte/webapp-manager
-      - copr:lilay/topgrade
+      # CachyOS Kernel Repository for Fedora
+      - https://fedorainfracloud.org
+      # RPM Fusion Free & Nonfree for NVIDIA drivers and multimedia codecs
+      - https://rpmfusion.org
+      - https://rpmfusion.org
 
   - type: rpm-ostree
+    repos:
+      - bochecha-cachyos-fedora-44
+      - rpmfusion-free-release
+      - rpmfusion-nonfree-release
     remove:
+      # Remove default Fedora Kernel
       - kernel
       - kernel-core
       - kernel-modules
-      - kernel-modules-core
       - kernel-modules-extra
+      # Remove KDE Discover to enforce terminal-free containerized app store strategy
+      - plasma-discover
+      - plasma-discover-flatpak
+      - plasma-discover-notifier
     install:
+      # Install CachyOS Kernel & BORE Scheduler packages
       - kernel-cachyos
-      - kernel-cachyos-devel-matched
-      - firefox
-      - distrobox
+      - kernel-cachyos-core
+      - kernel-cachyos-modules
+      - kernel-cachyos-modules-extra
+      # Container and subsystem tooling
       - podman
-      - fastfetch
-      - flatpak
-      - webapp-manager
-      - topgrade
-      - papirus-icon-theme
+      - distrobox
+      # Hardware and graphical dependencies (NVIDIA pre-baking)
       - akmod-nvidia
       - xorg-x11-drv-nvidia-cuda
-      - kdialog
+      - mesa-vulkan-drivers
+      # Fonts & Themes tooling dependencies
+      - google-sans-flex-fonts
+      - papirus-icon-theme
 
-  - type: default-flatpaks
-    notify: true
-    system:
-      install:
-        - io.github.dvlv.boxbuddyrs
-        - io.github.kolunmi.Bazaar
-        - com.usebottles.bottles
-        - io.missioncenter.MissionCenter
+  - type: flatpak
+    remotes:
+      flathub: https://flathub.org
+    install:
+      # Enforced GUI Application Store
+      - io.github.kolunmi.Bazaar
+      # Graphical Container Management Subsystem
+      - io.github.dvlv.boxbuddyrs
+
+  - type: script
+    scripts:
+      - system_skel_configs.sh
