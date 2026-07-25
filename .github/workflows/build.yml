@@ -50,6 +50,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Forza l'unione dei layer per rimanere sotto i limiti del kernel
+          squash: true
 
   build-iso:
     name: Generate Bootable ISO Installation Media
