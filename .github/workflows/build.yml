@@ -1,0 +1,80 @@
+--
+
+### 🤖 File 3: `.github/workflows/build.yml`
+*The automatic automated continuous integration configuration for CulOS image assembly.*
+
+```yaml
+# .github/workflows/build.yml
+name: Build CulOS and Generate ISO
+on:
+  schedule:
+    - cron: '0 0 * * 0' # Compiles automatically every Sunday night
+  workflow_dispatch: # Allows manual trigger from the GitHub browser interface
+
+env:
+  IMAGE_NAME: culos
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    name: Build and Push Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+
+      - name: Compile OS Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Containerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  generate-iso:
+    name: Generate Bootable File ISO
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Generate ISO via uBlue Image Builder
+        uses: ublue-os/isogenerator@main
+        with:
+          image-name: ${{ env.IMAGE_NAME }}
+          installer-repo: fedora-kinoite
+          installer-major-version: 44
+          image-repo: ${{ env.REGISTRY }}/${{ github.repository_owner }}
+          image-tag: latest
+          variant: 'Kinoite'
+
+      - name: Upload ISO Artifact to GitHub Downloads
+        uses: actions/upload-artifact@v4
+        with:
+          name: culos-distro-iso
+          path: ./deploy-iso/*.iso
+          retention-days: 7
