@@ -1,0 +1,43 @@
+# recipe.yml
+name: culos
+description: CulOS - An immutable Linux distribution based on Fedora Kinoite 44 featuring the high-performance CachyOS kernel, gaming hubs, and smart system management tools.
+base-image: ghcr.io/ublue-os/kinoite-main
+fedora-version: 44
+
+modules:
+  - type: yum-repo
+    repos:
+      - copr:bieszczaders/kernel-cachyos
+      - copr:perabyte/webapp-manager
+      - copr:lilay/topgrade
+
+  - type: rpm-ostree
+    remove:
+      - kernel
+      - kernel-core
+      - kernel-modules
+      - kernel-modules-core
+      - kernel-modules-extra
+    install:
+      - kernel-cachyos
+      - kernel-cachyos-devel-matched
+      - firefox
+      - distrobox
+      - podman
+      - fastfetch
+      - flatpak
+      - webapp-manager
+      - topgrade
+      - papirus-icon-theme
+      - akmod-nvidia
+      - xorg-x11-drv-nvidia-cuda
+      - kdialog
+
+  - type: default-flatpaks
+    notify: true
+    system:
+      install:
+        - io.github.dvlv.boxbuddyrs
+        - io.github.kolunmi.Bazaar
+        - com.usebottles.bottles
+        - io.missioncenter.MissionCenter
