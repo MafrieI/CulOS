@@ -1,4 +1,4 @@
-# .github/workflows/build.yml - Versione Nativa Blindata contro blocchi di rete
+# .github/workflows/build.yml - Versione nativa Fedora per evitare incompatibilità Ubuntu
 name: Build CulOS Immutable Image & Bootable ISO
 on:
   schedule:
@@ -58,21 +58,18 @@ jobs:
     name: Generate Bootable ISO Installation Media
     needs: build-image
     runs-on: ubuntu-latest
+    # CRUCIALE: Eseguiamo tutto direttamente in un container Fedora 44 pulito e privilegiato
+    container:
+      image: registry.fedoraproject.org/fedora:44
+      options: --privileged
     steps:
       - name: Checkout Code Repository
         uses: actions/checkout@v4
 
-      - name: Fix Runner Network DNS Parameters
-        # Forza i DNS di Google sul runner per evitare l'errore "No address associated with hostname"
+      - name: Install Fedora Native ISO Generation Tools
+        # Dnf troverà lorax e mkksiso istantaneamente senza errori di repository
         run: |
-          sudo chmod 777 /etc/resolv.conf
-          echo "nameserver 8.8.8.8" > /etc/resolv.conf
-          echo "nameserver 8.8.4.4" >> /etc/resolv.conf
-
-      - name: Install ISO Generation Tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xorriso squashfs-tools wget lorax isolinux
+          dnf install -y lorax wget xorriso squashfs-tools
 
       - name: Download Official Fedora Kinoite 44 Base ISO
         run: |
@@ -96,8 +93,8 @@ jobs:
 
       - name: Inject CulOS Configurations into ISO via Native Mkksiso
         run: |
-          # Chiamiamo lo strumento mkksiso nativo già presente nel sistema operativo
-          sudo mkksiso ./iso-working/culos.ks ./iso-working/fedora-kinoite-base.iso ./CulOS-Kinoite-44-Installation.iso
+          # mkksiso ora funzionerà perfettamente perché l'ambiente è Fedora nativo
+          mkksiso ./iso-working/culos.ks ./iso-working/fedora-kinoite-base.iso ./CulOS-Kinoite-44-Installation.iso
 
       - name: Upload Bootable CulOS Installation Media Artifact
         uses: actions/upload-artifact@v4
