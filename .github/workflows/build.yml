@@ -1,4 +1,4 @@
-# .github/workflows/build.yml - Generazione ISO nativa per Fedora 44
+# .github/workflows/build.yml - Fix polkit-gnome per Fedora 44
 name: Build CulOS Immutable Image & Bootable ISO
 on:
   schedule:
@@ -68,7 +68,7 @@ jobs:
         run: mkdir -p ./iso-output
 
       - name: Generate Bare-Metal Installer ISO for Fedora 44
-        # Eseguiamo il container ufficiale forzando i parametri strutturali corretti per Fedora 44
+        # Eseguiamo il container iniettando un comando preliminare per rimuovere il pacchetto deprecato polkit-gnome
         run: |
           docker run --rm --privileged \
             -v .:/isogenerator/output \
@@ -77,7 +77,9 @@ jobs:
             -e IMAGE_TAG=latest \
             -e IMAGE_REPO=${{ env.IMAGE_REGISTRY }} \
             -e VARIANT=Kinoite \
-            ghcr.io/ublue-os/isogenerator:latest
+            --entrypoint /bin/bash \
+            ghcr.io/ublue-os/isogenerator:latest \
+            -c "sed -i '/polkit-gnome/d' /usr/share/lorax/templates.d/99-generic/runtime-install.tmpl && /isogenerator/scripts/build-iso.sh"
 
       - name: Move generated ISO to artifact path
         run: |
