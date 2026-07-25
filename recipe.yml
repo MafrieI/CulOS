@@ -1,7 +1,7 @@
 # recipe.yml - CulOS Production Image Recipe
 name: culos
 description: A high-performance, immutable KDE Plasma distribution based on Fedora Kinoite 44.
-base-image: ghcr.io/fedora-atomic/kinoite:44
+base-image: ghcr.io/ublue-os/kinoite-main
 image-version: 44
 
 modules:
