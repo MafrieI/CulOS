@@ -1,92 +1,68 @@
-name: Crea Installer CulOS
+name: Build CulOS image and ISO
+
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   workflow_dispatch:
 
 env:
   IMAGE_NAME: culos
+  FEDORA_VERSION: 44
   IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
 
 jobs:
-  # STEP 1: Questo salva i file pesanti di CulOS sul tuo profilo GitHub (Funziona già)
   build-image:
-    name: Salva file di sistema CulOS
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
     steps:
-      - name: Preleva i file
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Configura Docker
+      - name: Setup QEMU and Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Accedi a GitHub Packages
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Prepara Tag
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: type=raw,value=latest
-
-      - name: Compila e Salva online
+      - name: Build & Push CulOS image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Containerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=docker,squash=true
+          tags: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.FEDORA_VERSION }}
 
-  # STEP 2: Questo crea la ISO leggera con le istruzioni da scaricare
   build-iso:
-    name: Crea ISO Leggera da scaricare
     needs: build-image
     runs-on: ubuntu-latest
+    container:
+      image: fedora:39
+      options: --privileged
     steps:
-      - name: Preleva i file
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Prepara cartella di uscita
-        run: mkdir -p ./output-culos
-
-      - name: Scarica ISO leggera ufficiale Fedora
+      - name: Install lorax, pykickstart, curl
         run: |
-          wget -O ./output-culos/CulOS-Installatore-Leggero.iso https://fedoraproject.org
+          dnf install -y lorax pykickstart curl
 
-      - name: Crea il foglio di istruzioni per il tuo PC
+      - name: Download Fedora 44 installer ISO
         run: |
-          cat <<EOF > ./output-culos/istruzioni_installazione.ks
-          text
-          keyboard --vckeymap=it --layout=it
-          lang it_IT.UTF-8
-          timezone Europe/Rome --utc
-          rootpw --lock
-          user --name=culos --groups=wheel
-          ostreecontainer --url=ostree:image/docker://${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          clearpart --all --initlabel
-          autopart --type=plain
-          reboot
-          EOF
+          curl -L \
+            "https://download.fedoraproject.org/pub/fedora/linux/releases/44/Workstation/x86_64/iso/Fedora-Workstation-Live-44-1.7.x86_64.iso" \
+            -o Fedora-44-installer.iso
 
-      - name: Impacchetta tutto in un file ZIP
+      - name: Validate CulOS Kickstart
         run: |
-          zip -r ./CulOS-Pacchetto-Installazione.zip ./output-culos/*
+          ksvalidator culos.ks || exit 1
 
-      - name: Invia lo ZIP negli Artifacts di GitHub
+      - name: Generate CulOS ISO with mkksiso
+        run: |
+          mkksiso --ks culos.ks Fedora-44-installer.iso CulOS-44-installer.iso
+
+      - name: Upload CulOS ISO artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CulOS-Pronto-Da-Scaricare
-          path: ./CulOS-Pacchetto-Installazione.zip
-          retention-days: 14
+          name: CulOS-44-installer
+          path: CulOS-44-installer.iso
