@@ -8,7 +8,8 @@ on:
 env:
   IMAGE_NAME: culos
   FEDORA_VERSION: 44
-  IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+  #IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+  IMAGE_REGISTRY: ghcr.io/mafriei
 
 jobs:
   build-image:
