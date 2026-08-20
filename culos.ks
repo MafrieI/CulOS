@@ -13,6 +13,6 @@ clearpart --all --initlabel
 autopart --type=plain
 
 # Comando chiave: installa l'immagine container CulOS come sistema OSTree
-ostreecontainer --url=ostree:image/docker://ghcr.io/<tuo-utente>/culos:44
+ostreecontainer --url=ostree:image/docker://ghcr.io/MafrieI/culos:44
 
 reboot
