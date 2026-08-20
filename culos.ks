@@ -1,21 +1,18 @@
-# culos.ks - Kickstart per installare CulOS (Fedora Kinoite 44)
+# culos.ks - Kickstart per installare CulOS (Fedora Kinoite 44 container) via ostreecontainer
 
 text
 lang it_IT.UTF-8
-keyboard --vckeymap=it --layout=it
+keyboard --vckeymap=it --xlayouts=it
 timezone Europe/Rome --utc
 
 rootpw --lock
 user --name=culos --groups=wheel
 
-# Partizionamento automatico semplice
+# Partizionamento automatico semplice (puoi adattare a LVM/Btrfs se vuoi)
 clearpart --all --initlabel
 autopart --type=plain
 
-# Standard package installation
-%packages
-@core
-kinoite-core
-%end
+# Comando chiave: installa l'immagine container CulOS come sistema OSTree
+ostreecontainer --url=ostree:image/docker://ghcr.io/mafriei/culos:44
 
 reboot
